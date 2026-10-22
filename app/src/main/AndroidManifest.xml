@@ -12,7 +12,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".ReviewActivity" />
+        <activity
+            android:name=".ReviewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
         <activity android:name=".AddActivity" />
         <activity android:name=".ManageActivity" />
     </application>
