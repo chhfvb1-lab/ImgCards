@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -16,12 +17,26 @@ class ManageActivity : Activity() {
     private lateinit var db: Db
     private var cards: MutableList<Card> = mutableListOf()
     private lateinit var adapter: BaseAdapter
+    private lateinit var tabAll: Button
+    private lateinit var tabStar: Button
+    private var onlyStar = false
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
-        cards = db.all().toMutableList()
-        val lv = ListView(this).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        onlyStar = intent.getBooleanExtra("starred", false)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tabAll = Button(this).apply { setOnClickListener { onlyStar = false; reload() } }
+        tabStar = Button(this).apply { setOnClickListener { onlyStar = true; reload() } }
+        tabs.addView(tabAll, LinearLayout.LayoutParams(0, -2, 1f))
+        tabs.addView(tabStar, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(tabs)
+
+        val lv = ListView(this)
         adapter = object : BaseAdapter() {
             override fun getCount() = cards.size
             override fun getItem(i: Int) = cards[i]
@@ -38,7 +53,8 @@ class ManageActivity : Activity() {
                     scaleType = ImageView.ScaleType.CENTER_CROP
                 }, LinearLayout.LayoutParams(s, s))
                 row.addView(TextView(this@ManageActivity).apply {
-                    text = "فاصله: ${c.ivl} روز" + if (c.back != null || c.note != null) "  • دارای پشت" else ""
+                    text = (if (c.star == 1) "★ " else "") + "فاصله: ${c.ivl} روز" +
+                        if (c.back != null || c.note != null) "  • دارای پشت" else ""
                     setPadding(24, 0, 0, 0)
                 })
                 return row
@@ -46,13 +62,30 @@ class ManageActivity : Activity() {
         }
         lv.adapter = adapter
         lv.setOnItemClickListener { _, _, i, _ ->
-            AlertDialog.Builder(this).setMessage("این کارت حذف شود؟")
-                .setPositiveButton("حذف") { _, _ ->
-                    val c = cards.removeAt(i)
-                    db.delete(c.id); U.deleteImage(this, c.front); U.deleteImage(this, c.back)
-                    adapter.notifyDataSetChanged()
-                }.setNegativeButton("لغو", null).show()
+            val c = cards[i]
+            val starLabel = if (c.star == 1) "برداشتن ستاره" else "ستاره‌دار کردن"
+            AlertDialog.Builder(this).setItems(arrayOf(starLabel, "حذف کارت")) { _, which ->
+                if (which == 0) {
+                    db.setStar(c.id, if (c.star == 1) 0 else 1); reload()
+                } else {
+                    AlertDialog.Builder(this).setMessage("این کارت حذف شود؟")
+                        .setPositiveButton("حذف") { _, _ ->
+                            db.delete(c.id); U.deleteImage(this, c.front); U.deleteImage(this, c.back); reload()
+                        }.setNegativeButton("لغو", null).show()
+                }
+            }.show()
         }
-        setContentView(lv)
+        root.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
+        reload()
+    }
+
+    private fun reload() {
+        val all = db.all()
+        val st = all.count { it.star == 1 }
+        tabAll.text = (if (!onlyStar) "● " else "") + "همه (${all.size})"
+        tabStar.text = (if (onlyStar) "● " else "") + "★ ستاره‌دارها ($st)"
+        cards = (if (onlyStar) all.filter { it.star == 1 } else all).toMutableList()
+        adapter.notifyDataSetChanged()
     }
 }
