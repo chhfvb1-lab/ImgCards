@@ -9,7 +9,7 @@ import kotlin.math.roundToInt
 
 data class Card(
     val id: Long, val front: String, val back: String?, val note: String?,
-    val due: Long, val ivl: Int, val ease: Double, val reps: Int
+    val due: Long, val ivl: Int, val ease: Double, val reps: Int, val star: Int = 0
 )
 
 object Sched {
@@ -30,11 +30,13 @@ object Sched {
     fun label(c: Card, q: Int): String = if (q == 0) "۱۰ دقیقه" else "${apply(c, q).ivl} روز"
 }
 
-class Db(ctx: Context) : SQLiteOpenHelper(ctx, "cards.db", null, 1) {
+class Db(ctx: Context) : SQLiteOpenHelper(ctx, "cards.db", null, 2) {
     override fun onCreate(d: SQLiteDatabase) {
-        d.execSQL("CREATE TABLE cards(id INTEGER PRIMARY KEY AUTOINCREMENT, front TEXT, back TEXT, note TEXT, due INTEGER, ivl INTEGER, ease REAL, reps INTEGER)")
+        d.execSQL("CREATE TABLE cards(id INTEGER PRIMARY KEY AUTOINCREMENT, front TEXT, back TEXT, note TEXT, due INTEGER, ivl INTEGER, ease REAL, reps INTEGER, star INTEGER DEFAULT 0)")
     }
-    override fun onUpgrade(d: SQLiteDatabase, o: Int, n: Int) {}
+    override fun onUpgrade(d: SQLiteDatabase, o: Int, n: Int) {
+        if (o < 2) d.execSQL("ALTER TABLE cards ADD COLUMN star INTEGER DEFAULT 0")
+    }
 
     fun add(front: String, back: String?, note: String?) {
         val v = ContentValues().apply {
@@ -49,13 +51,18 @@ class Db(ctx: Context) : SQLiteOpenHelper(ctx, "cards.db", null, 1) {
         readableDatabase.query("cards", null, where, null, null, null, order).use { c ->
             while (c.moveToNext()) out.add(
                 Card(c.getLong(0), c.getString(1), c.getString(2), c.getString(3),
-                    c.getLong(4), c.getInt(5), c.getDouble(6), c.getInt(7))
+                    c.getLong(4), c.getInt(5), c.getDouble(6), c.getInt(7), c.getInt(8))
             )
         }
         return out
     }
 
-    fun dueCards(): List<Card> = query("due <= ${System.currentTimeMillis()}", "due ASC, id ASC")
+    fun dueCards(): List<Card> = query("due <= ${System.currentTimeMillis()} AND star = 0", "due ASC, id ASC")
+    fun starred(): List<Card> = query("star = 1", "id DESC")
+    fun setStar(id: Long, v: Int) {
+        val cv = ContentValues().apply { put("star", v) }
+        writableDatabase.update("cards", cv, "id=?", arrayOf(id.toString()))
+    }
     fun all(): List<Card> = query(null, "id DESC")
     fun update(c: Card) {
         val v = ContentValues().apply { put("due", c.due); put("ivl", c.ivl); put("ease", c.ease); put("reps", c.reps) }
