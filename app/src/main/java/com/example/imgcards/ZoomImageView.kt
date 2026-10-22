@@ -7,6 +7,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.widget.ImageView
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -19,6 +20,8 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
     private val maxScale = 8f
 
     var onTap: (() -> Unit)? = null
+    /** +1 = کشیدن به چپ (بعدی)، -1 = کشیدن به راست (قبلی) */
+    var onSwipe: ((Int) -> Unit)? = null
 
     var flipV = false
         set(v) { field = v; applyMatrix() }
@@ -34,6 +37,17 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
 
     private val gestDet = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent) = true
+        override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+            if (e1 == null || scale > 1.05f || scaleDet.isInProgress) return false
+            val dx = e2.x - e1.x
+            val dy = e2.y - e1.y
+            val minDist = 80 * resources.displayMetrics.density
+            if (abs(dx) > minDist && abs(dx) > abs(dy) * 1.5f && abs(vx) > 300f) {
+                onSwipe?.invoke(if (dx < 0) 1 else -1)
+                return true
+            }
+            return false
+        }
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean { onTap?.invoke(); return true }
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             if (scale > 1f && !scaleDet.isInProgress) { tx -= dx; ty -= dy; applyMatrix() }
