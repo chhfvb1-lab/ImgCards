@@ -20,11 +20,13 @@ import android.widget.Toast
 
 class ReviewActivity : Activity() {
     private lateinit var db: Db
-    private val queue = ArrayDeque<Card>()
+    private val cards = ArrayList<Card>()
+    private var pos = 0
     private var cur: Card? = null
     private var starredMode = false
     private var locked = false
     private var overlayShown = true
+    private var animating = false
 
     private lateinit var column: LinearLayout
     private lateinit var imgHolder: FrameLayout
@@ -53,13 +55,16 @@ class ReviewActivity : Activity() {
         super.onCreate(b)
         db = Db(this)
         starredMode = intent.getBooleanExtra("starred", false)
-        if (starredMode) queue.addAll(db.starred().shuffled()) else queue.addAll(db.dueCards())
+        if (starredMode) cards.addAll(db.starred().shuffled()) else cards.addAll(db.dueCards())
 
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        img = ZoomImageView(this).apply { onTap = { if (isLandscape()) toggleOverlay() } }
+        img = ZoomImageView(this).apply {
+            onTap = { if (isLandscape()) toggleOverlay() }
+            onSwipe = { d -> swipeTo(d) }
+        }
         imgHolder = FrameLayout(this)
         imgHolder.addView(img, FrameLayout.LayoutParams(-1, -1))
         column.addView(imgHolder, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -79,7 +84,7 @@ class ReviewActivity : Activity() {
         bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         note = TextView(this).apply { textSize = 20f; gravity = Gravity.CENTER; setPadding(8, 8, 8, 8) }
         showBtn = btn("نمایش پاسخ") { showAnswer() }
-        nextBtn = btn("بعدی") { next() }.apply { visibility = View.GONE }
+        nextBtn = btn("بعدی") { nextInStarred() }.apply { visibility = View.GONE }
         rateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; visibility = View.GONE }
         for (q in 0..3) {
             val bt = Button(this).apply { textSize = 13f; setOnClickListener { rate(q) } }
@@ -93,7 +98,9 @@ class ReviewActivity : Activity() {
 
         setContentView(column)
         applyLayout()
-        next()
+        if (cards.isEmpty()) { finish(); return }
+        showCurrent()
+        Toast.makeText(this, "تصویر را به چپ بکش: بعدی • به راست: قبلی", Toast.LENGTH_LONG).show()
     }
 
     // ---------- چرخش و تمام‌صفحه ----------
@@ -173,6 +180,39 @@ class ReviewActivity : Activity() {
         Toast.makeText(this, if (locked) "چرخش قفل شد" else "چرخش آزاد شد", Toast.LENGTH_SHORT).show()
     }
 
+    // ---------- ناوبری بین کارت‌ها ----------
+    private fun showCurrent() {
+        val c = cards[pos]
+        cur = c
+        info.text = "کارت ${pos + 1} از ${cards.size}"
+        img.setImageBitmap(U.load(this, c.front, 1800))
+        note.text = ""
+        updateStarBtn()
+        showBtn.visibility = View.VISIBLE
+        nextBtn.visibility = View.GONE
+        rateRow.visibility = View.GONE
+    }
+
+    /** dir: +1 بعدی، -1 قبلی. بدون نیاز به نمایش پاسخ؛ کارت امتیاز نمی‌گیرد و همچنان در صف می‌ماند. */
+    private fun swipeTo(dir: Int) {
+        if (animating) return
+        if (cards.size <= 1) {
+            Toast.makeText(this, "کارت دیگری نیست", Toast.LENGTH_SHORT).show(); return
+        }
+        animating = true
+        val d = img.width * 0.25f
+        img.animate().translationX(-dir * d).alpha(0f).setDuration(110).withEndAction {
+            pos = (pos + dir + cards.size) % cards.size
+            showCurrent()
+            img.translationX = dir * d
+            img.animate().translationX(0f).alpha(1f).setDuration(110).withEndAction { animating = false }.start()
+        }.start()
+    }
+
+    private fun finishDone() {
+        Toast.makeText(this, "مرور تمام شد 🎉", Toast.LENGTH_LONG).show(); finish()
+    }
+
     // ---------- ستاره و مرور ----------
     private fun updateStarBtn() {
         starBtn.text = if ((cur?.star ?: 0) == 1) "★ ستاره" else "☆ ستاره"
@@ -182,24 +222,19 @@ class ReviewActivity : Activity() {
         val c = cur ?: return
         val v = if (c.star == 1) 0 else 1
         db.setStar(c.id, v)
-        cur = c.copy(star = v)
-        updateStarBtn()
-        Toast.makeText(this, if (v == 1) "به پوشه ستاره‌دارها رفت" else "از پوشه ستاره‌دارها برگشت", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun next() {
-        val c = queue.removeFirstOrNull()
-        if (c == null) {
-            Toast.makeText(this, "مرور تمام شد 🎉", Toast.LENGTH_LONG).show(); finish(); return
+        if (v == 1 && !starredMode) {
+            Toast.makeText(this, "به پوشه ستاره‌دارها رفت ★", Toast.LENGTH_SHORT).show()
+            cards.removeAt(pos)
+            if (cards.isEmpty()) { finishDone(); return }
+            if (pos >= cards.size) pos = 0
+            showCurrent()
+        } else {
+            val n = c.copy(star = v)
+            cur = n
+            cards[pos] = n
+            updateStarBtn()
+            Toast.makeText(this, if (v == 1) "ستاره‌دار شد" else "از پوشه ستاره‌دارها برگشت", Toast.LENGTH_SHORT).show()
         }
-        cur = c
-        info.text = "باقی‌مانده: ${queue.size + 1}"
-        img.setImageBitmap(U.load(this, c.front, 1800))
-        note.text = ""
-        updateStarBtn()
-        showBtn.visibility = View.VISIBLE
-        nextBtn.visibility = View.GONE
-        rateRow.visibility = View.GONE
     }
 
     private fun showAnswer() {
@@ -215,11 +250,19 @@ class ReviewActivity : Activity() {
         }
     }
 
+    private fun nextInStarred() {
+        if (pos >= cards.size - 1) finishDone() else { pos++; showCurrent() }
+    }
+
     private fun rate(q: Int) {
         val c = cur ?: return
         val n = Sched.apply(c, q)
         db.update(n)
-        if (q == 0 && c.star == 0) queue.addLast(n)
-        next()
+        cards.removeAt(pos)
+        val again = q == 0 && c.star == 0
+        if (again) cards.add(n)
+        if (cards.isEmpty()) { finishDone(); return }
+        if (pos >= cards.size || (again && pos == cards.size - 1 && cards.size > 1)) pos = 0
+        showCurrent()
     }
 }
