@@ -104,7 +104,7 @@ class ReviewActivity : Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && isLandscape()) setImmersive(true)
+        if (hasFocus && isLandscape()) applyImmersive(true)
     }
 
     private fun detach(v: View) { (v.parent as? ViewGroup)?.removeView(v) }
@@ -122,7 +122,7 @@ class ReviewActivity : Activity() {
             column.setPadding(0, 0, 0, 0)
             val vis = if (overlayShown) View.VISIBLE else View.GONE
             topBar.visibility = vis; bottomPanel.visibility = vis
-            setImmersive(true)
+            applyImmersive(true)
         } else {
             column.addView(topBar, 0)
             column.addView(bottomPanel)
@@ -131,7 +131,7 @@ class ReviewActivity : Activity() {
             column.setBackgroundColor(Color.WHITE)
             val p = U.dp(this, 12); column.setPadding(p, p, p, p)
             topBar.visibility = View.VISIBLE; bottomPanel.visibility = View.VISIBLE
-            setImmersive(false)
+            applyImmersive(false)
         }
     }
 
@@ -142,7 +142,7 @@ class ReviewActivity : Activity() {
     }
 
     @Suppress("DEPRECATION")
-    private fun setImmersive(on: Boolean) {
+    private fun applyImmersive(on: Boolean) {
         if (Build.VERSION.SDK_INT >= 28) {
             val lp = window.attributes
             lp.layoutInDisplayCutoutMode = if (on) WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
