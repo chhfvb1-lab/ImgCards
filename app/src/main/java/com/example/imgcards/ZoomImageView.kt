@@ -18,6 +18,8 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
     private var ty = 0f
     private val maxScale = 8f
 
+    var onTap: (() -> Unit)? = null
+
     var flipV = false
         set(v) { field = v; applyMatrix() }
 
@@ -32,6 +34,7 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
 
     private val gestDet = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent) = true
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean { onTap?.invoke(); return true }
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             if (scale > 1f && !scaleDet.isInProgress) { tx -= dx; ty -= dy; applyMatrix() }
             return true
