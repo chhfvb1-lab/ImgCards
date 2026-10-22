@@ -33,6 +33,10 @@ class MainActivity : Activity() {
             if (db.dueCards().isEmpty()) Toast.makeText(this, "فعلاً کارتی برای مرور نیست", Toast.LENGTH_SHORT).show()
             else startActivity(Intent(this, ReviewActivity::class.java))
         }
+        add("مرور پوشه ستاره‌دارها ★") {
+            if (db.starred().isEmpty()) Toast.makeText(this, "هنوز کارت ستاره‌داری نداری", Toast.LENGTH_SHORT).show()
+            else startActivity(Intent(this, ReviewActivity::class.java).putExtra("starred", true))
+        }
         add("افزودن چند تصویر یکجا") {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
@@ -46,7 +50,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        stats.text = "برای مرور امروز: ${db.dueCards().size}\nکل کارت‌ها: ${db.all().size}"
+        val all = db.all()
+        stats.text = "برای مرور امروز: ${db.dueCards().size}\nستاره‌دارها: ${all.count { it.star == 1 }}\nکل کارت‌ها: ${all.size}"
     }
 
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
