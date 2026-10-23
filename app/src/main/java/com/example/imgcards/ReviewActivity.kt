@@ -34,11 +34,9 @@ class ReviewActivity : Activity() {
     private lateinit var bottomPanel: LinearLayout
     private lateinit var info: TextView
     private lateinit var img: ZoomImageView
-    private lateinit var nextBtn: Button
     private lateinit var starBtn: Button
     private lateinit var lockBtn: Button
     private lateinit var flipBtn: Button
-    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
     private lateinit var rateRow: LinearLayout
     private val rateBtns = ArrayList<Button>()
     private val names = listOf("دوباره", "سخت", "خوب", "آسان")
@@ -64,7 +62,6 @@ class ReviewActivity : Activity() {
         img = ZoomImageView(this).apply {
             onTap = { if (isLandscape()) toggleOverlay() }
             onSwipe = { d -> swipeTo(d) }
-            flipV = prefs.getBoolean("flipV", false)
         }
         imgHolder = FrameLayout(this)
         imgHolder.addView(img, FrameLayout.LayoutParams(-1, -1))
@@ -73,11 +70,7 @@ class ReviewActivity : Activity() {
         // نوار بالا
         topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         info = TextView(this).apply { textSize = 15f }
-        flipBtn = small("↕ وارونه") {
-            img.flipV = !img.flipV
-            prefs.edit().putBoolean("flipV", img.flipV).apply()
-            updateFlipBtn()
-        }
+        flipBtn = small("↕ وارونه") { toggleFlip() }
         updateFlipBtn()
         lockBtn = small("🔒 قفل") { toggleLock() }
         starBtn = small("☆ ستاره") { toggleStar() }
@@ -88,14 +81,12 @@ class ReviewActivity : Activity() {
 
         // پنل پایین
         bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        nextBtn = btn("بعدی") { nextInStarred() }.apply { visibility = if (starredMode) View.VISIBLE else View.GONE }
-        rateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; visibility = if (starredMode) View.GONE else View.VISIBLE }
+        rateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for (q in 0..3) {
             val bt = Button(this).apply { textSize = 13f; setOnClickListener { rate(q) } }
             rateBtns.add(bt)
             rateRow.addView(bt, LinearLayout.LayoutParams(0, -2, 1f))
         }
-        bottomPanel.addView(nextBtn)
         bottomPanel.addView(rateRow)
 
         setContentView(column)
@@ -175,7 +166,19 @@ class ReviewActivity : Activity() {
     }
 
     private fun updateFlipBtn() {
-        flipBtn.text = if (img.flipV) "↕ وارونه ✓" else "↕ وارونه"
+        flipBtn.text = if (cur?.flip == 1) "↕ وارونه ✓" else "↕ وارونه"
+    }
+
+    /** وارونگی برای هر تصویر جداگانه ذخیره می‌شود و با تعویض تصویر یا بستن برنامه حفظ می‌شود */
+    private fun toggleFlip() {
+        val c = cur ?: return
+        val v = if (c.flip == 1) 0 else 1
+        db.setFlip(c.id, v)
+        val n = c.copy(flip = v)
+        cur = n
+        cards[pos] = n
+        img.flipV = v == 1
+        updateFlipBtn()
     }
 
     private fun toggleLock() {
@@ -192,8 +195,10 @@ class ReviewActivity : Activity() {
         cur = c
         info.text = "کارت ${pos + 1} از ${cards.size}"
         img.setImageBitmap(U.load(this, c.front, 1800))
+        img.flipV = c.flip == 1
+        updateFlipBtn()
         updateStarBtn()
-        if (!starredMode) for (q in 0..3) rateBtns[q].text = "${names[q]}\n${Sched.label(c, q)}"
+        for (q in 0..3) rateBtns[q].text = "${names[q]}\n${Sched.label(c, q)}"
     }
 
     /** dir: +1 بعدی، -1 قبلی. بدون نیاز به نمایش پاسخ؛ کارت امتیاز نمی‌گیرد و همچنان در صف می‌ماند. */
@@ -240,16 +245,12 @@ class ReviewActivity : Activity() {
         }
     }
 
-    private fun nextInStarred() {
-        if (pos >= cards.size - 1) finishDone() else { pos++; showCurrent() }
-    }
-
     private fun rate(q: Int) {
         val c = cur ?: return
         val n = Sched.apply(c, q)
         db.update(n)
         cards.removeAt(pos)
-        val again = q == 0 && c.star == 0
+        val again = q == 0
         if (again) cards.add(n)
         if (cards.isEmpty()) { finishDone(); return }
         if (pos >= cards.size || (again && pos == cards.size - 1 && cards.size > 1)) pos = 0
