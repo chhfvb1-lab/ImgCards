@@ -12,6 +12,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 
 class ManageActivity : Activity() {
     private lateinit var db: Db
@@ -76,8 +77,23 @@ class ManageActivity : Activity() {
             }.show()
         }
         root.addView(lv, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(btn("🗑 حذف همه کارت‌ها") { confirmDeleteAll() })
         setContentView(root)
         reload()
+    }
+
+    private fun confirmDeleteAll() {
+        val n = db.all().size
+        if (n == 0) { Toast.makeText(this, "کارتی وجود ندارد", Toast.LENGTH_SHORT).show(); return }
+        AlertDialog.Builder(this)
+            .setTitle("حذف همه کارت‌ها")
+            .setMessage("همه‌ی $n کارت و تصاویرشان برای همیشه پاک می‌شوند و قابل بازگشت نیست.")
+            .setPositiveButton("حذف همه") { _, _ ->
+                db.deleteAll(); U.deleteAllImages(this); reload()
+                Toast.makeText(this, "همه کارت‌ها حذف شد", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("لغو", null)
+            .show()
     }
 
     private fun reload() {
