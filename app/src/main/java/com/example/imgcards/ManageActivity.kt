@@ -51,6 +51,7 @@ class ManageActivity : Activity() {
                 row.addView(ImageView(this@ManageActivity).apply {
                     setImageBitmap(U.load(this@ManageActivity, c.front, 150))
                     scaleType = ImageView.ScaleType.CENTER_CROP
+                    scaleY = if (c.flip == 1) -1f else 1f
                 }, LinearLayout.LayoutParams(s, s))
                 row.addView(TextView(this@ManageActivity).apply {
                     text = (if (c.star == 1) "★ " else "") + "فاصله: ${c.ivl} روز"
