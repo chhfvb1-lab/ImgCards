@@ -53,8 +53,7 @@ class ManageActivity : Activity() {
                     scaleType = ImageView.ScaleType.CENTER_CROP
                 }, LinearLayout.LayoutParams(s, s))
                 row.addView(TextView(this@ManageActivity).apply {
-                    text = (if (c.star == 1) "★ " else "") + "فاصله: ${c.ivl} روز" +
-                        if (c.back != null || c.note != null) "  • دارای پشت" else ""
+                    text = (if (c.star == 1) "★ " else "") + "فاصله: ${c.ivl} روز"
                     setPadding(24, 0, 0, 0)
                 })
                 return row
