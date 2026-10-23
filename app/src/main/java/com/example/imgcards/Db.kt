@@ -73,5 +73,6 @@ class Db(ctx: Context) : SQLiteOpenHelper(ctx, "cards.db", null, 3) {
         val v = ContentValues().apply { put("due", c.due); put("ivl", c.ivl); put("ease", c.ease); put("reps", c.reps) }
         writableDatabase.update("cards", v, "id=?", arrayOf(c.id.toString()))
     }
+    fun deleteAll() { writableDatabase.delete("cards", null, null) }
     fun delete(id: Long) { writableDatabase.delete("cards", "id=?", arrayOf(id.toString())) }
 }
