@@ -37,13 +37,12 @@ class MainActivity : Activity() {
             if (db.starred().isEmpty()) Toast.makeText(this, "هنوز کارت ستاره‌داری نداری", Toast.LENGTH_SHORT).show()
             else startActivity(Intent(this, ReviewActivity::class.java).putExtra("starred", true))
         }
-        add("افزودن چند تصویر یکجا") {
+        add("افزودن تصویر (چند تا هم می‌شود)") {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             }, 1)
         }
-        add("افزودن کارت (روی + پشت)") { startActivity(Intent(this, AddActivity::class.java)) }
         add("مدیریت کارت‌ها") { startActivity(Intent(this, ManageActivity::class.java)) }
         setContentView(root)
     }
