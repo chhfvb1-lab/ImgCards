@@ -73,7 +73,7 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
 
     override fun setImageBitmap(bm: Bitmap?) {
         super.setImageBitmap(bm)
-        scale = 1f; tx = 0f; ty = 0f; flipV = false
+        scale = 1f; tx = 0f; ty = 0f
         applyMatrix()
     }
 
