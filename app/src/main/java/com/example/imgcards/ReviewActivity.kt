@@ -34,11 +34,11 @@ class ReviewActivity : Activity() {
     private lateinit var bottomPanel: LinearLayout
     private lateinit var info: TextView
     private lateinit var img: ZoomImageView
-    private lateinit var note: TextView
-    private lateinit var showBtn: Button
     private lateinit var nextBtn: Button
     private lateinit var starBtn: Button
     private lateinit var lockBtn: Button
+    private lateinit var flipBtn: Button
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
     private lateinit var rateRow: LinearLayout
     private val rateBtns = ArrayList<Button>()
     private val names = listOf("دوباره", "سخت", "خوب", "آسان")
@@ -64,6 +64,7 @@ class ReviewActivity : Activity() {
         img = ZoomImageView(this).apply {
             onTap = { if (isLandscape()) toggleOverlay() }
             onSwipe = { d -> swipeTo(d) }
+            flipV = prefs.getBoolean("flipV", false)
         }
         imgHolder = FrameLayout(this)
         imgHolder.addView(img, FrameLayout.LayoutParams(-1, -1))
@@ -72,7 +73,12 @@ class ReviewActivity : Activity() {
         // نوار بالا
         topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         info = TextView(this).apply { textSize = 15f }
-        val flipBtn = small("↕ وارونه") { img.flipV = !img.flipV }
+        flipBtn = small("↕ وارونه") {
+            img.flipV = !img.flipV
+            prefs.edit().putBoolean("flipV", img.flipV).apply()
+            updateFlipBtn()
+        }
+        updateFlipBtn()
         lockBtn = small("🔒 قفل") { toggleLock() }
         starBtn = small("☆ ستاره") { toggleStar() }
         topBar.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
@@ -82,17 +88,13 @@ class ReviewActivity : Activity() {
 
         // پنل پایین
         bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        note = TextView(this).apply { textSize = 20f; gravity = Gravity.CENTER; setPadding(8, 8, 8, 8) }
-        showBtn = btn("نمایش پاسخ") { showAnswer() }
-        nextBtn = btn("بعدی") { nextInStarred() }.apply { visibility = View.GONE }
-        rateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; visibility = View.GONE }
+        nextBtn = btn("بعدی") { nextInStarred() }.apply { visibility = if (starredMode) View.VISIBLE else View.GONE }
+        rateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; visibility = if (starredMode) View.GONE else View.VISIBLE }
         for (q in 0..3) {
             val bt = Button(this).apply { textSize = 13f; setOnClickListener { rate(q) } }
             rateBtns.add(bt)
             rateRow.addView(bt, LinearLayout.LayoutParams(0, -2, 1f))
         }
-        bottomPanel.addView(note)
-        bottomPanel.addView(showBtn)
         bottomPanel.addView(nextBtn)
         bottomPanel.addView(rateRow)
 
@@ -124,7 +126,7 @@ class ReviewActivity : Activity() {
             imgHolder.addView(bottomPanel, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
             val shade = Color.argb(150, 0, 0, 0)
             topBar.setBackgroundColor(shade); bottomPanel.setBackgroundColor(shade)
-            info.setTextColor(Color.WHITE); note.setTextColor(Color.WHITE)
+            info.setTextColor(Color.WHITE)
             column.setBackgroundColor(Color.BLACK)
             column.setPadding(0, 0, 0, 0)
             val vis = if (overlayShown) View.VISIBLE else View.GONE
@@ -134,7 +136,7 @@ class ReviewActivity : Activity() {
             column.addView(topBar, 0)
             column.addView(bottomPanel)
             topBar.setBackgroundColor(Color.TRANSPARENT); bottomPanel.setBackgroundColor(Color.TRANSPARENT)
-            info.setTextColor(Color.BLACK); note.setTextColor(Color.BLACK)
+            info.setTextColor(Color.BLACK)
             column.setBackgroundColor(Color.WHITE)
             val p = U.dp(this, 12); column.setPadding(p, p, p, p)
             topBar.visibility = View.VISIBLE; bottomPanel.visibility = View.VISIBLE
@@ -172,6 +174,10 @@ class ReviewActivity : Activity() {
         }
     }
 
+    private fun updateFlipBtn() {
+        flipBtn.text = if (img.flipV) "↕ وارونه ✓" else "↕ وارونه"
+    }
+
     private fun toggleLock() {
         locked = !locked
         requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED
@@ -186,11 +192,8 @@ class ReviewActivity : Activity() {
         cur = c
         info.text = "کارت ${pos + 1} از ${cards.size}"
         img.setImageBitmap(U.load(this, c.front, 1800))
-        note.text = ""
         updateStarBtn()
-        showBtn.visibility = View.VISIBLE
-        nextBtn.visibility = View.GONE
-        rateRow.visibility = View.GONE
+        if (!starredMode) for (q in 0..3) rateBtns[q].text = "${names[q]}\n${Sched.label(c, q)}"
     }
 
     /** dir: +1 بعدی، -1 قبلی. بدون نیاز به نمایش پاسخ؛ کارت امتیاز نمی‌گیرد و همچنان در صف می‌ماند. */
@@ -234,19 +237,6 @@ class ReviewActivity : Activity() {
             cards[pos] = n
             updateStarBtn()
             Toast.makeText(this, if (v == 1) "ستاره‌دار شد" else "از پوشه ستاره‌دارها برگشت", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun showAnswer() {
-        val c = cur ?: return
-        c.back?.let { img.setImageBitmap(U.load(this, it, 1800)) }
-        note.text = c.note ?: ""
-        showBtn.visibility = View.GONE
-        if (starredMode) {
-            nextBtn.visibility = View.VISIBLE
-        } else {
-            for (q in 0..3) rateBtns[q].text = "${names[q]}\n${Sched.label(c, q)}"
-            rateRow.visibility = View.VISIBLE
         }
     }
 
