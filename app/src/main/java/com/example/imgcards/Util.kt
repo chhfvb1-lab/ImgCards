@@ -48,6 +48,12 @@ object U {
         return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = s })
     }
 
+    fun deleteAllImages(ctx: Context) {
+        ctx.filesDir.listFiles()?.forEach { f ->
+            if (f.name.startsWith("img_") && f.name.endsWith(".jpg")) f.delete()
+        }
+    }
+
     fun deleteImage(ctx: Context, name: String?) { if (name != null) File(ctx.filesDir, name).delete() }
 }
 
