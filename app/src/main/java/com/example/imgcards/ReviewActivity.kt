@@ -226,23 +226,16 @@ class ReviewActivity : Activity() {
         starBtn.text = if ((cur?.star ?: 0) == 1) "★ ستاره" else "☆ ستاره"
     }
 
+    /** ستاره دادن یا برداشتن، کارت را همان لحظه از صفِ همین مرور بیرون می‌برد */
     private fun toggleStar() {
         val c = cur ?: return
         val v = if (c.star == 1) 0 else 1
         db.setStar(c.id, v)
-        if (v == 1 && !starredMode) {
-            Toast.makeText(this, "به پوشه ستاره‌دارها رفت ★", Toast.LENGTH_SHORT).show()
-            cards.removeAt(pos)
-            if (cards.isEmpty()) { finishDone(); return }
-            if (pos >= cards.size) pos = 0
-            showCurrent()
-        } else {
-            val n = c.copy(star = v)
-            cur = n
-            cards[pos] = n
-            updateStarBtn()
-            Toast.makeText(this, if (v == 1) "ستاره‌دار شد" else "از پوشه ستاره‌دارها برگشت", Toast.LENGTH_SHORT).show()
-        }
+        Toast.makeText(this, if (v == 1) "به پوشه ستاره‌دارها رفت ★" else "از پوشه ستاره‌دارها خارج شد", Toast.LENGTH_SHORT).show()
+        cards.removeAt(pos)
+        if (cards.isEmpty()) { finish(); return }
+        if (pos >= cards.size) pos = 0
+        showCurrent()
     }
 
     private fun rate(q: Int) {
