@@ -16,5 +16,8 @@
             android:name=".ReviewActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
         <activity android:name=".ManageActivity" />
+        <activity
+            android:name=".ViewerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
     </application>
 </manifest>
