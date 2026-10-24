@@ -1,11 +1,19 @@
 package com.example.imgcards
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.AbsListView
+import android.widget.BaseAdapter
+import android.widget.FrameLayout
+import android.widget.GridView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -13,44 +21,126 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var db: Db
     private lateinit var stats: TextView
+    private lateinit var grid: GridView
+    private lateinit var adapter: BaseAdapter
+    private var cards: List<Card> = emptyList()
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
+        val pad = U.dp(this, 10)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            val p = U.dp(this@MainActivity, 24); setPadding(p, p, p, p)
         }
-        root.addView(TextView(this).apply { text = "مرور تصویری"; textSize = 28f; gravity = Gravity.CENTER })
-        stats = TextView(this).apply { textSize = 18f; gravity = Gravity.CENTER; setPadding(0, 32, 0, 32) }
-        root.addView(stats)
-        fun add(t: String, f: () -> Unit) {
-            root.addView(btn(t, f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = 16 })
+
+        // بالا: عنوان، آمار و دکمه‌ها
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
         }
-        add("شروع مرور") {
-            if (db.dueCards().isEmpty()) Toast.makeText(this, "فعلاً کارتی برای مرور نیست", Toast.LENGTH_SHORT).show()
-            else startActivity(Intent(this, ReviewActivity::class.java))
+        header.addView(TextView(this).apply { text = "مرور تصویری"; textSize = 20f; gravity = Gravity.CENTER })
+        stats = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setPadding(0, pad / 2, 0, pad / 2) }
+        header.addView(stats)
+        fun row(vararg items: Pair<String, () -> Unit>) {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for ((t, f) in items) r.addView(btn(t, f).apply { textSize = 14f }, LinearLayout.LayoutParams(0, -2, 1f))
+            header.addView(r)
         }
-        add("مرور پوشه ستاره‌دارها ★") {
-            if (db.starred().isEmpty()) Toast.makeText(this, "هنوز کارت ستاره‌داری نداری", Toast.LENGTH_SHORT).show()
-            else startActivity(Intent(this, ReviewActivity::class.java).putExtra("starred", true))
+        row("شروع مرور" to { startReview() }, "مرور ستاره‌دارها ★" to { startStarred() })
+        row("افزودن تصویر" to { pickImages() }, "مدیریت کارت‌ها" to { startActivity(Intent(this, ManageActivity::class.java)) })
+        root.addView(header)
+
+        // پایین: گالری ۳ ستونه
+        val sp = U.dp(this, 2)
+        grid = GridView(this).apply {
+            numColumns = 3
+            horizontalSpacing = sp
+            verticalSpacing = sp
+            stretchMode = GridView.STRETCH_COLUMN_WIDTH
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
-        add("افزودن تصویر (چند تا هم می‌شود)") {
-            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
-                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-            }, 1)
+        adapter = object : BaseAdapter() {
+            override fun getCount() = cards.size
+            override fun getItem(i: Int) = cards[i]
+            override fun getItemId(i: Int) = cards[i].id
+            override fun getView(i: Int, v: View?, p: ViewGroup?): View {
+                val c = cards[i]
+                val size = (resources.displayMetrics.widthPixels - 2 * sp) / 3
+                val cell = (v as? FrameLayout) ?: FrameLayout(this@MainActivity).apply {
+                    addView(ImageView(this@MainActivity).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        setBackgroundColor(Color.rgb(224, 224, 224))
+                    }, FrameLayout.LayoutParams(-1, -1))
+                    addView(TextView(this@MainActivity).apply {
+                        text = "★"; textSize = 18f
+                        setTextColor(Color.rgb(255, 200, 0))
+                        setShadowLayer(4f, 0f, 0f, Color.BLACK)
+                    }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(8, 2, 0, 0) })
+                }
+                cell.layoutParams = AbsListView.LayoutParams(size, size)
+                val iv = cell.getChildAt(0) as ImageView
+                iv.scaleY = if (c.flip == 1) -1f else 1f
+                cell.getChildAt(1).visibility = if (c.star == 1) View.VISIBLE else View.GONE
+                Thumbs.load(this@MainActivity, c.front, 480, iv)
+                return cell
+            }
         }
-        add("مدیریت کارت‌ها") { startActivity(Intent(this, ManageActivity::class.java)) }
+        grid.adapter = adapter
+        grid.setOnItemClickListener { _, _, i, _ -> cardDialog(cards[i]) }
+
+        val empty = TextView(this).apply {
+            text = "هنوز تصویری اضافه نکرده‌ای\nاز «افزودن تصویر» شروع کن"
+            gravity = Gravity.CENTER; textSize = 16f
+        }
+        val frame = FrameLayout(this)
+        frame.addView(grid, FrameLayout.LayoutParams(-1, -1))
+        frame.addView(empty, FrameLayout.LayoutParams(-1, -1))
+        grid.emptyView = empty
+        root.addView(frame, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
     override fun onResume() {
         super.onResume()
-        val all = db.all()
-        stats.text = "برای مرور امروز: ${db.dueCards().size}\nستاره‌دارها: ${all.count { it.star == 1 }}\nکل کارت‌ها: ${all.size}"
+        refresh()
+    }
+
+    private fun refresh() {
+        cards = db.all()
+        stats.text = "سررسید: ${db.dueCards().size} • ستاره‌دار: ${cards.count { it.star == 1 }} • کل: ${cards.size}"
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun startReview() {
+        if (db.dueCards().isEmpty()) Toast.makeText(this, "فعلاً کارتی برای مرور نیست", Toast.LENGTH_SHORT).show()
+        else startActivity(Intent(this, ReviewActivity::class.java))
+    }
+
+    private fun startStarred() {
+        if (db.starred().isEmpty()) Toast.makeText(this, "هنوز کارت ستاره‌داری نداری", Toast.LENGTH_SHORT).show()
+        else startActivity(Intent(this, ReviewActivity::class.java).putExtra("starred", true))
+    }
+
+    private fun pickImages() {
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }, 1)
+    }
+
+    private fun cardDialog(c: Card) {
+        val starLabel = if (c.star == 1) "برداشتن ستاره" else "ستاره‌دار کردن"
+        AlertDialog.Builder(this).setItems(arrayOf(starLabel, "حذف کارت")) { _, which ->
+            if (which == 0) {
+                db.setStar(c.id, if (c.star == 1) 0 else 1); refresh()
+            } else {
+                AlertDialog.Builder(this).setMessage("این کارت حذف شود؟")
+                    .setPositiveButton("حذف") { _, _ ->
+                        db.delete(c.id); U.deleteImage(this, c.front); U.deleteImage(this, c.back); refresh()
+                    }.setNegativeButton("لغو", null).show()
+            }
+        }.show()
     }
 
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
@@ -68,7 +158,7 @@ class MainActivity : Activity() {
             }
             runOnUiThread {
                 Toast.makeText(this, "$n کارت اضافه شد", Toast.LENGTH_SHORT).show()
-                onResume()
+                refresh()
             }
         }.start()
     }
