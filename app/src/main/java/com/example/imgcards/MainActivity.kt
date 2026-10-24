@@ -87,7 +87,10 @@ class MainActivity : Activity() {
             }
         }
         grid.adapter = adapter
-        grid.setOnItemClickListener { _, _, i, _ -> cardDialog(cards[i]) }
+        grid.setOnItemClickListener { _, _, i, _ ->
+            startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", cards[i].id))
+        }
+        grid.setOnItemLongClickListener { _, _, i, _ -> cardDialog(cards[i]); true }
 
         val empty = TextView(this).apply {
             text = "هنوز تصویری اضافه نکرده‌ای\nاز «افزودن تصویر» شروع کن"
