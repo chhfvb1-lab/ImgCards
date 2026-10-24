@@ -24,10 +24,13 @@ class MainActivity : Activity() {
     private lateinit var grid: GridView
     private lateinit var adapter: BaseAdapter
     private var cards: List<Card> = emptyList()
+    private var columns = 3
+    private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
+        columns = prefs.getInt("gridCols", 3).coerceIn(1, 6)
         val pad = U.dp(this, 10)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -53,8 +56,9 @@ class MainActivity : Activity() {
 
         // پایین: گالری ۳ ستونه
         val sp = U.dp(this, 2)
-        grid = GridView(this).apply {
-            numColumns = 3
+        grid = PinchGridView(this).apply {
+            numColumns = columns
+            onStep = { s -> changeColumns(s) }
             horizontalSpacing = sp
             verticalSpacing = sp
             stretchMode = GridView.STRETCH_COLUMN_WIDTH
@@ -66,7 +70,7 @@ class MainActivity : Activity() {
             override fun getItemId(i: Int) = cards[i].id
             override fun getView(i: Int, v: View?, p: ViewGroup?): View {
                 val c = cards[i]
-                val size = (resources.displayMetrics.widthPixels - 2 * sp) / 3
+                val size = (resources.displayMetrics.widthPixels - (columns - 1) * sp) / columns
                 val cell = (v as? FrameLayout) ?: FrameLayout(this@MainActivity).apply {
                     addView(ImageView(this@MainActivity).apply {
                         scaleType = ImageView.ScaleType.CENTER_CROP
@@ -82,7 +86,8 @@ class MainActivity : Activity() {
                 val iv = cell.getChildAt(0) as ImageView
                 iv.scaleY = if (c.flip == 1) -1f else 1f
                 cell.getChildAt(1).visibility = if (c.star == 1) View.VISIBLE else View.GONE
-                Thumbs.load(this@MainActivity, c.front, 480, iv)
+                val px = when (columns) { 1 -> 1000; 2 -> 700; 3 -> 480; else -> 320 }
+                Thumbs.load(this@MainActivity, c.front, px, iv)
                 return cell
             }
         }
@@ -107,6 +112,18 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refresh()
+    }
+
+    /** زوم دو انگشتی روی گالری: step=+1 بزرگ‌تر (ستون کمتر)، -1 کوچک‌تر */
+    private fun changeColumns(step: Int) {
+        val n = (columns - step).coerceIn(1, 6)
+        if (n == columns) return
+        val first = grid.firstVisiblePosition
+        columns = n
+        grid.numColumns = n
+        prefs.edit().putInt("gridCols", n).apply()
+        adapter.notifyDataSetChanged()
+        grid.post { grid.setSelection(first) }
     }
 
     private fun refresh() {
