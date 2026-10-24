@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.media.ExifInterface
 import android.widget.Button
+import android.widget.ImageView
 import java.io.File
 import java.io.FileOutputStream
 
@@ -59,4 +60,26 @@ object U {
 
 fun Context.btn(text: String, onClick: () -> Unit) = Button(this).apply {
     this.text = text; textSize = 16f; setOnClickListener { onClick() }
+}
+
+/** بارگذاری پس‌زمینه‌ی تصاویر کوچک با کش، تا گالری روی گوشی ضعیف هم روان باشد */
+object Thumbs {
+    private val cache = object : android.util.LruCache<String, Bitmap>(24 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+    }
+    private val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+    private val ui = android.os.Handler(android.os.Looper.getMainLooper())
+
+    fun load(ctx: Context, name: String, size: Int, iv: ImageView) {
+        iv.tag = name
+        val hit = cache.get(name)
+        if (hit != null) { iv.setImageBitmap(hit); return }
+        iv.setImageBitmap(null)
+        val app = ctx.applicationContext
+        pool.execute {
+            val bmp = U.load(app, name, size)
+            if (bmp != null) cache.put(name, bmp)
+            ui.post { if (iv.tag == name) iv.setImageBitmap(bmp) }
+        }
+    }
 }
