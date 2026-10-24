@@ -71,15 +71,16 @@ object Thumbs {
     private val ui = android.os.Handler(android.os.Looper.getMainLooper())
 
     fun load(ctx: Context, name: String, size: Int, iv: ImageView) {
-        iv.tag = name
-        val hit = cache.get(name)
+        val key = "$name@$size"
+        iv.tag = key
+        val hit = cache.get(key)
         if (hit != null) { iv.setImageBitmap(hit); return }
         iv.setImageBitmap(null)
         val app = ctx.applicationContext
         pool.execute {
             val bmp = U.load(app, name, size)
-            if (bmp != null) cache.put(name, bmp)
-            ui.post { if (iv.tag == name) iv.setImageBitmap(bmp) }
+            if (bmp != null) cache.put(key, bmp)
+            ui.post { if (iv.tag == key) iv.setImageBitmap(bmp) }
         }
     }
 }
