@@ -23,7 +23,7 @@ class ReviewActivity : Activity() {
     private val cards = ArrayList<Card>()
     private var pos = 0
     private var cur: Card? = null
-    private var starredMode = false
+    private var level = 0   // 0 = مرور عادی، 1 = پوشه ستاره‌دارها، 2 = پوشه دو ستاره
     private var locked = false
     private var overlayShown = true
     private var animating = false
@@ -35,6 +35,7 @@ class ReviewActivity : Activity() {
     private lateinit var info: TextView
     private lateinit var img: ZoomImageView
     private lateinit var starBtn: Button
+    private lateinit var star2Btn: Button
     private lateinit var lockBtn: Button
     private lateinit var flipBtn: Button
     private lateinit var rateRow: LinearLayout
@@ -42,8 +43,8 @@ class ReviewActivity : Activity() {
     private val names = listOf("دوباره", "سخت", "خوب", "آسان")
 
     private fun small(text: String, f: () -> Unit) = Button(this).apply {
-        this.text = text; textSize = 13f; minWidth = 0; minimumWidth = 0
-        val p = U.dp(this@ReviewActivity, 8); setPadding(p, 0, p, 0)
+        this.text = text; textSize = 12f; minWidth = 0; minimumWidth = 0
+        val p = U.dp(this@ReviewActivity, 2); setPadding(p, 0, p, 0)
         setOnClickListener { f() }
     }
 
@@ -52,12 +53,8 @@ class ReviewActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
-        starredMode = intent.getBooleanExtra("starred", false)
-        if (starredMode) {
-            val fid = intent.getLongExtra("folder", -1L)
-            val list = if (fid < 0) db.starred() else db.starred().filter { it.folder == fid }
-            cards.addAll(list.shuffled())
-        } else cards.addAll(db.dueCards())
+        level = intent.getIntExtra("level", if (intent.getBooleanExtra("starred", false)) 1 else 0)
+        if (level > 0) cards.addAll(db.byStar(level).shuffled()) else cards.addAll(db.dueCards())
 
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -66,22 +63,27 @@ class ReviewActivity : Activity() {
         img = ZoomImageView(this).apply {
             onTap = { if (isLandscape()) toggleOverlay() }
             onSwipe = { d -> swipeTo(d) }
+            onHold = { deleteCurrent() }
         }
         imgHolder = FrameLayout(this)
         imgHolder.addView(img, FrameLayout.LayoutParams(-1, -1))
         column.addView(imgHolder, LinearLayout.LayoutParams(-1, 0, 1f))
 
         // نوار بالا
-        topBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        info = TextView(this).apply { textSize = 15f }
-        flipBtn = small("↕ وارونه") { toggleFlip() }
+        topBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        info = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER }
+        flipBtn = small("↕\nوارونه") { toggleFlip() }
         updateFlipBtn()
-        lockBtn = small("🔒 قفل") { toggleLock() }
-        starBtn = small("☆ ستاره") { toggleStar() }
-        topBar.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-        topBar.addView(flipBtn)
-        topBar.addView(lockBtn)
-        topBar.addView(starBtn)
+        lockBtn = small("🔒\nقفل") { toggleLock() }
+        starBtn = small("☆\nستاره") { toggleStar() }
+        star2Btn = small("★★\nدو ستاره") { toggleStar2() }
+        val delBtn = small("🗑\nحذف") { deleteCurrent() }
+        val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (bt in listOf(flipBtn, lockBtn, starBtn, star2Btn, delBtn)) {
+            btnRow.addView(bt, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        topBar.addView(info, LinearLayout.LayoutParams(-1, -2))
+        topBar.addView(btnRow, LinearLayout.LayoutParams(-1, -2))
 
         // پنل پایین
         bottomPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -170,7 +172,7 @@ class ReviewActivity : Activity() {
     }
 
     private fun updateFlipBtn() {
-        flipBtn.text = if (cur?.flip == 1) "↕ وارونه ✓" else "↕ وارونه"
+        flipBtn.text = if (cur?.flip == 1) "↕\nوارونه ✓" else "↕\nوارونه"
     }
 
     /** وارونگی برای هر تصویر جداگانه ذخیره می‌شود و با تعویض تصویر یا بستن برنامه حفظ می‌شود */
@@ -189,7 +191,7 @@ class ReviewActivity : Activity() {
         locked = !locked
         requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED
         else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        lockBtn.text = if (locked) "🔓 آزاد" else "🔒 قفل"
+        lockBtn.text = if (locked) "🔓\nآزاد" else "🔒\nقفل"
         Toast.makeText(this, if (locked) "چرخش قفل شد" else "چرخش آزاد شد", Toast.LENGTH_SHORT).show()
     }
 
@@ -227,19 +229,45 @@ class ReviewActivity : Activity() {
 
     // ---------- ستاره و مرور ----------
     private fun updateStarBtn() {
-        starBtn.text = if ((cur?.star ?: 0) == 1) "★ ستاره" else "☆ ستاره"
+        starBtn.text = if (level == 0) "☆\nستاره" else "★\nستاره"
+        star2Btn.text = if (level == 2) "★★\nدو ستاره ✓" else "★★\nدو ستاره"
     }
 
-    /** ستاره دادن یا برداشتن، کارت را همان لحظه از صفِ همین مرور بیرون می‌برد */
-    private fun toggleStar() {
+    /** حذف کامل تصویر فعلی (با دکمه‌ی حذف یا نگه داشتن انگشت روی تصویر) */
+    private fun deleteCurrent() {
         val c = cur ?: return
-        val v = if (c.star == 1) 0 else 1
+        deleteDialog(this, db, listOf(c)) {
+            cards.removeAt(pos)
+            if (cards.isEmpty()) {
+                finish()
+            } else {
+                if (pos >= cards.size) pos = 0
+                showCurrent()
+            }
+        }
+    }
+
+    /** تغییر سطح ستاره؛ کارت همان لحظه از صفِ همین مرور بیرون می‌رود */
+    private fun changeLevel(v: Int, msg: String) {
+        val c = cur ?: return
         db.setStar(c.id, v)
-        Toast.makeText(this, if (v == 1) "به پوشه ستاره‌دارها رفت ★" else "از پوشه ستاره‌دارها خارج شد", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         cards.removeAt(pos)
         if (cards.isEmpty()) { finish(); return }
         if (pos >= cards.size) pos = 0
         showCurrent()
+    }
+
+    /** ★ : عادی ← پوشه ستاره‌دارها ؛ در هر پوشه‌ی ستاره‌دار ← خروج از ستاره‌ها */
+    private fun toggleStar() {
+        if (level == 0) changeLevel(1, "به پوشه ستاره‌دارها رفت ★")
+        else changeLevel(0, "از ستاره‌دارها خارج شد")
+    }
+
+    /** ★★ : رفتن به پوشه دو ستاره؛ اگر همین‌جا هستی برگشت به پوشه ستاره‌دارها */
+    private fun toggleStar2() {
+        if (level == 2) changeLevel(1, "به پوشه ستاره‌دارها برگشت ★")
+        else changeLevel(2, "به پوشه دو ستاره رفت ★★")
     }
 
     private fun rate(q: Int) {
