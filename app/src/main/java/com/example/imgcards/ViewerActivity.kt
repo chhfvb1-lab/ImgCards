@@ -38,7 +38,11 @@ class ViewerActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
-        cards.addAll(db.all())
+        val ids = intent.getLongArrayExtra("ids")
+        if (ids != null) {
+            val map = db.all().associateBy { it.id }
+            for (id in ids) map[id]?.let { cards.add(it) }
+        } else cards.addAll(db.all())
         if (cards.isEmpty()) { finish(); return }
         val startId = intent.getLongExtra("id", -1L)
         pos = cards.indexOfFirst { it.id == startId }.coerceAtLeast(0)
