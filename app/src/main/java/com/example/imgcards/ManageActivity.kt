@@ -55,7 +55,7 @@ class ManageActivity : Activity() {
                     scaleY = if (c.flip == 1) -1f else 1f
                 }, LinearLayout.LayoutParams(s, s))
                 row.addView(TextView(this@ManageActivity).apply {
-                    text = (if (c.star == 1) "★ " else "") + "فاصله: ${c.ivl} روز"
+                    text = (if (c.star >= 1) "★ " else "") + "فاصله: ${c.ivl} روز"
                     setPadding(24, 0, 0, 0)
                 })
                 return row
@@ -64,10 +64,10 @@ class ManageActivity : Activity() {
         lv.adapter = adapter
         lv.setOnItemClickListener { _, _, i, _ ->
             val c = cards[i]
-            val starLabel = if (c.star == 1) "برداشتن ستاره" else "ستاره‌دار کردن"
+            val starLabel = if (c.star >= 1) "برداشتن ستاره" else "ستاره‌دار کردن"
             AlertDialog.Builder(this).setItems(arrayOf(starLabel, "حذف کارت")) { _, which ->
                 if (which == 0) {
-                    db.setStar(c.id, if (c.star == 1) 0 else 1); reload()
+                    db.setStar(c.id, if (c.star >= 1) 0 else 1); reload()
                 } else {
                     AlertDialog.Builder(this).setMessage("این کارت حذف شود؟")
                         .setPositiveButton("حذف") { _, _ ->
@@ -98,10 +98,10 @@ class ManageActivity : Activity() {
 
     private fun reload() {
         val all = db.all()
-        val st = all.count { it.star == 1 }
+        val st = all.count { it.star >= 1 }
         tabAll.text = (if (!onlyStar) "● " else "") + "همه (${all.size})"
         tabStar.text = (if (onlyStar) "● " else "") + "★ ستاره‌دارها ($st)"
-        cards = (if (onlyStar) all.filter { it.star == 1 } else all).toMutableList()
+        cards = (if (onlyStar) all.filter { it.star >= 1 } else all).toMutableList()
         adapter.notifyDataSetChanged()
     }
 }
