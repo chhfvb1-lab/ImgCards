@@ -38,7 +38,8 @@ fun bindImageCell(ctx: Context, cell: FrameLayout, c: Card, size: Int, px: Int, 
     cell.layoutParams = AbsListView.LayoutParams(size, size)
     val iv = cell.getChildAt(0) as ImageView
     iv.scaleY = if (c.flip == 1) -1f else 1f
-    cell.getChildAt(1).visibility = if (showStar && c.star == 1) View.VISIBLE else View.GONE
+    (cell.getChildAt(1) as TextView).text = if (c.star == 2) "★★" else "★"
+    cell.getChildAt(1).visibility = if (showStar && c.star >= 1) View.VISIBLE else View.GONE
     cell.getChildAt(2).visibility = if (selected) View.VISIBLE else View.GONE
     Thumbs.load(ctx, c.front, px, iv)
 }
@@ -52,7 +53,7 @@ fun makeFolderCell(ctx: Context, size: Int, name: String, count: Int): TextView 
 }
 
 /** نوار بالای صفحه هنگام انتخاب چند تصویر */
-class SelectionBar(ctx: Context, onMove: () -> Unit, onDelete: () -> Unit, onCancel: () -> Unit) {
+class SelectionBar(ctx: Context, moveLabel: String, onMove: () -> Unit, onDelete: () -> Unit, onCancel: () -> Unit) {
     val countText = TextView(ctx).apply { textSize = 15f; setTextColor(Color.WHITE) }
     val view = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -62,7 +63,7 @@ class SelectionBar(ctx: Context, onMove: () -> Unit, onDelete: () -> Unit, onCan
         val p = U.dp(ctx, 6); setPadding(p, p, p, p)
         addView(countText, LinearLayout.LayoutParams(0, -2, 1f))
         addView(Button(ctx).apply {
-            text = "📁 انتقال"; textSize = 13f; minWidth = 0; minimumWidth = 0
+            text = moveLabel; textSize = 13f; minWidth = 0; minimumWidth = 0
             setOnClickListener { onMove() }
         })
         addView(Button(ctx).apply {
@@ -74,43 +75,6 @@ class SelectionBar(ctx: Context, onMove: () -> Unit, onDelete: () -> Unit, onCan
             setOnClickListener { onCancel() }
         })
     }
-}
-
-fun promptName(act: Activity, title: String, onName: (String) -> Unit) {
-    val et = EditText(act).apply { hint = "نام پوشه"; setSingleLine(true) }
-    AlertDialog.Builder(act).setTitle(title).setView(et)
-        .setPositiveButton("ساخت") { _, _ ->
-            val n = et.text.toString().trim()
-            if (n.isNotEmpty()) onName(n)
-        }
-        .setNegativeButton("لغو", null)
-        .show()
-}
-
-/** انتقال تصاویر انتخاب‌شده به یکی از پوشه‌های ستاره‌دار (یا ساخت پوشه‌ی جدید) */
-fun moveDialog(act: Activity, db: Db, ids: List<Long>, onDone: () -> Unit) {
-    val folders = db.folders()
-    val labels = ArrayList<String>()
-    labels.add("★ پوشه ستاره‌دارها (اصلی)")
-    for (f in folders) labels.add("📁 " + f.name)
-    labels.add("➕ پوشه جدید...")
-    labels.add("✖ خارج کردن از ستاره‌دارها")
-    AlertDialog.Builder(act)
-        .setTitle("انتقال ${ids.size} تصویر به")
-        .setItems(labels.toTypedArray()) { _, which ->
-            when {
-                which == 0 -> { db.setFolder(ids, 0L); onDone() }
-                which <= folders.size -> { db.setFolder(ids, folders[which - 1].id); onDone() }
-                which == folders.size + 1 -> promptName(act, "پوشه جدید") { n ->
-                    val id = db.addFolder(n)
-                    db.setFolder(ids, id)
-                    onDone()
-                }
-                else -> { db.unstar(ids); onDone() }
-            }
-        }
-        .setNegativeButton("لغو", null)
-        .show()
 }
 
 /** حذف کامل تصاویر (از برنامه و حافظه) با تأیید */
