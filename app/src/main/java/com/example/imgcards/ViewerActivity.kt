@@ -28,10 +28,11 @@ class ViewerActivity : Activity() {
     private lateinit var info: TextView
     private lateinit var flipBtn: Button
     private lateinit var starBtn: Button
+    private lateinit var star2Btn: Button
 
     private fun small(text: String, f: () -> Unit) = Button(this).apply {
-        this.text = text; textSize = 13f; minWidth = 0; minimumWidth = 0
-        val p = U.dp(this@ViewerActivity, 8); setPadding(p, 0, p, 0)
+        this.text = text; textSize = 12f; minWidth = 0; minimumWidth = 0
+        val p = U.dp(this@ViewerActivity, 2); setPadding(p, 0, p, 0)
         setOnClickListener { f() }
     }
 
@@ -54,22 +55,27 @@ class ViewerActivity : Activity() {
         img = ZoomImageView(this).apply {
             onTap = { toggleOverlay() }
             onSwipe = { d -> swipeTo(d) }
+            onHold = { deleteCurrent() }
         }
         frame.addView(img, FrameLayout.LayoutParams(-1, -1))
 
         topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.argb(150, 0, 0, 0))
             val p = U.dp(this@ViewerActivity, 8)
             setPadding(p, U.dp(this@ViewerActivity, 14), p, p)
         }
-        info = TextView(this).apply { textSize = 15f; setTextColor(Color.WHITE) }
-        flipBtn = small("↕ وارونه") { toggleFlip() }
-        starBtn = small("☆ ستاره") { toggleStar() }
-        topBar.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-        topBar.addView(flipBtn)
-        topBar.addView(starBtn)
+        info = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Color.WHITE) }
+        flipBtn = small("↕\nوارونه") { toggleFlip() }
+        starBtn = small("☆\nستاره") { toggleStar() }
+        star2Btn = small("★★\nدو ستاره") { toggleStar2() }
+        val delBtn = small("🗑\nحذف") { deleteCurrent() }
+        val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (bt in listOf(flipBtn, starBtn, star2Btn, delBtn)) {
+            btnRow.addView(bt, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        topBar.addView(info, LinearLayout.LayoutParams(-1, -2))
+        topBar.addView(btnRow, LinearLayout.LayoutParams(-1, -2))
         frame.addView(topBar, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
 
         setContentView(frame)
@@ -119,8 +125,9 @@ class ViewerActivity : Activity() {
 
     private fun updateButtons() {
         val c = cards[pos]
-        flipBtn.text = if (c.flip == 1) "↕ وارونه ✓" else "↕ وارونه"
-        starBtn.text = if (c.star == 1) "★ ستاره" else "☆ ستاره"
+        flipBtn.text = if (c.flip == 1) "↕\nوارونه ✓" else "↕\nوارونه"
+        starBtn.text = if (c.star >= 1) "★\nستاره" else "☆\nستاره"
+        star2Btn.text = if (c.star == 2) "★★\nدو ستاره ✓" else "★★\nدو ستاره"
     }
 
     private fun toggleFlip() {
@@ -132,13 +139,36 @@ class ViewerActivity : Activity() {
         updateButtons()
     }
 
-    private fun toggleStar() {
+    /** حذف کامل تصویر فعلی (با دکمه‌ی حذف یا نگه داشتن انگشت روی تصویر) */
+    private fun deleteCurrent() {
         val c = cards[pos]
-        val v = if (c.star == 1) 0 else 1
+        deleteDialog(this, db, listOf(c)) {
+            cards.removeAt(pos)
+            if (cards.isEmpty()) {
+                finish()
+            } else {
+                if (pos >= cards.size) pos = cards.size - 1
+                showCard()
+            }
+        }
+    }
+
+    private fun setLevel(v: Int, msg: String) {
+        val c = cards[pos]
         db.setStar(c.id, v)
         cards[pos] = c.copy(star = v)
         updateButtons()
-        Toast.makeText(this, if (v == 1) "ستاره‌دار شد" else "ستاره برداشته شد", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toggleStar() {
+        if (cards[pos].star == 0) setLevel(1, "به پوشه ستاره‌دارها رفت ★")
+        else setLevel(0, "از ستاره‌دارها خارج شد")
+    }
+
+    private fun toggleStar2() {
+        if (cards[pos].star == 2) setLevel(1, "به پوشه ستاره‌دارها برگشت ★")
+        else setLevel(2, "به پوشه دو ستاره رفت ★★")
     }
 
     /** dir: +1 بعدی، -1 قبلی */
