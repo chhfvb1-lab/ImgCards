@@ -1,6 +1,7 @@
 package com.example.imgcards
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -29,6 +30,8 @@ class ViewerActivity : Activity() {
     private lateinit var flipBtn: Button
     private lateinit var starBtn: Button
     private lateinit var star2Btn: Button
+    private lateinit var lockBtn: Button
+    private var locked = false
 
     private fun small(text: String, f: () -> Unit) = Button(this).apply {
         this.text = text; textSize = 12f; minWidth = 0; minimumWidth = 0
@@ -67,11 +70,12 @@ class ViewerActivity : Activity() {
         }
         info = TextView(this).apply { textSize = 14f; gravity = Gravity.CENTER; setTextColor(Color.WHITE) }
         flipBtn = small("↕\nوارونه") { toggleFlip() }
+        lockBtn = small("🔒\nقفل") { toggleLock() }
         starBtn = small("☆\nستاره") { toggleStar() }
         star2Btn = small("★★\nدو ستاره") { toggleStar2() }
         val delBtn = small("🗑\nحذف") { deleteCurrent() }
         val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        for (bt in listOf(flipBtn, starBtn, star2Btn, delBtn)) {
+        for (bt in listOf(flipBtn, lockBtn, starBtn, star2Btn, delBtn)) {
             btnRow.addView(bt, LinearLayout.LayoutParams(0, -2, 1f))
         }
         topBar.addView(info, LinearLayout.LayoutParams(-1, -2))
@@ -137,6 +141,15 @@ class ViewerActivity : Activity() {
         cards[pos] = c.copy(flip = v)
         img.flipV = v == 1
         updateButtons()
+    }
+
+    /** قفل چرخش: در همان حالتی که گوشی هست (عمودی یا افقی) قفل می‌شود و برنمی‌گردد */
+    private fun toggleLock() {
+        locked = !locked
+        requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        lockBtn.text = if (locked) "🔓\nباز" else "🔒\nقفل"
+        Toast.makeText(this, if (locked) "چرخش قفل شد" else "چرخش باز شد", Toast.LENGTH_SHORT).show()
     }
 
     /** حذف کامل تصویر فعلی (با دکمه‌ی حذف یا نگه داشتن انگشت روی تصویر) */
