@@ -122,7 +122,7 @@ class FolderActivity : Activity() {
             toggleSel(c.id)
         } else {
             val ids = items.mapNotNull { x -> x.card?.id }.toLongArray()
-            startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", c.id).putExtra("ids", ids))
+            startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", c.id).putExtra("ids", ids).putExtra("level", level))
         }
     }
 
