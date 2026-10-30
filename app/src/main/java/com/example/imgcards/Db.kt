@@ -67,6 +67,19 @@ class Db(ctx: Context) : SQLiteOpenHelper(ctx, "cards.db", null, 4) {
 
     fun dueCards(): List<Card> = query("due <= ${System.currentTimeMillis()} AND star = 0", "due ASC, id ASC")
     fun starred(): List<Card> = query("star = 1", "id DESC")
+    /** سطح ستاره: 1 = پوشه ستاره‌دارها، 2 = پوشه دو ستاره */
+    fun byStar(level: Int): List<Card> = query("star = $level", "id DESC")
+    fun setStars(ids: List<Long>, v: Int) {
+        val d = writableDatabase
+        d.beginTransaction()
+        try {
+            for (id in ids) {
+                val cv = ContentValues().apply { put("star", v); put("folder", 0) }
+                d.update("cards", cv, "id=?", arrayOf(id.toString()))
+            }
+            d.setTransactionSuccessful()
+        } finally { d.endTransaction() }
+    }
     fun setFlip(id: Long, v: Int) {
         val cv = ContentValues().apply { put("flip", v) }
         writableDatabase.update("cards", cv, "id=?", arrayOf(id.toString()))
