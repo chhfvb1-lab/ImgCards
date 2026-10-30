@@ -1,19 +1,15 @@
 package com.example.imgcards
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.GridView
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -23,7 +19,9 @@ class MainActivity : Activity() {
     private lateinit var stats: TextView
     private lateinit var grid: GridView
     private lateinit var adapter: BaseAdapter
+    private lateinit var bar: SelectionBar
     private var cards: List<Card> = emptyList()
+    private val selected = LinkedHashSet<Long>()
     private var columns = 3
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
 
@@ -50,11 +48,14 @@ class MainActivity : Activity() {
             for ((t, f) in items) r.addView(btn(t, f).apply { textSize = 14f }, LinearLayout.LayoutParams(0, -2, 1f))
             header.addView(r)
         }
-        row("شروع مرور" to { startReview() }, "مرور ستاره‌دارها ★" to { startStarred() })
+        row("شروع مرور" to { startReview() }, "پوشه ستاره‌دارها ★" to { openStarredFolder() })
         row("افزودن تصویر" to { pickImages() }, "مدیریت کارت‌ها" to { startActivity(Intent(this, ManageActivity::class.java)) })
         root.addView(header)
 
-        // پایین: گالری ۳ ستونه
+        bar = SelectionBar(this, { moveSelected() }, { deleteSelected() }, { clearSelection() })
+        root.addView(bar.view)
+
+        // پایین: گالری
         val sp = U.dp(this, 2)
         grid = PinchGridView(this).apply {
             numColumns = columns
@@ -71,31 +72,18 @@ class MainActivity : Activity() {
             override fun getView(i: Int, v: View?, p: ViewGroup?): View {
                 val c = cards[i]
                 val size = (resources.displayMetrics.widthPixels - (columns - 1) * sp) / columns
-                val cell = (v as? FrameLayout) ?: FrameLayout(this@MainActivity).apply {
-                    addView(ImageView(this@MainActivity).apply {
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                        setBackgroundColor(Color.rgb(224, 224, 224))
-                    }, FrameLayout.LayoutParams(-1, -1))
-                    addView(TextView(this@MainActivity).apply {
-                        text = "★"; textSize = 18f
-                        setTextColor(Color.rgb(255, 200, 0))
-                        setShadowLayer(4f, 0f, 0f, Color.BLACK)
-                    }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(8, 2, 0, 0) })
-                }
-                cell.layoutParams = AbsListView.LayoutParams(size, size)
-                val iv = cell.getChildAt(0) as ImageView
-                iv.scaleY = if (c.flip == 1) -1f else 1f
-                cell.getChildAt(1).visibility = if (c.star == 1) View.VISIBLE else View.GONE
-                val px = when (columns) { 1 -> 1000; 2 -> 700; 3 -> 480; else -> 320 }
-                Thumbs.load(this@MainActivity, c.front, px, iv)
+                val cell = (v as? FrameLayout) ?: makeImageCell(this@MainActivity)
+                bindImageCell(this@MainActivity, cell, c, size, thumbPx(columns), true, selected.contains(c.id))
                 return cell
             }
         }
         grid.adapter = adapter
         grid.setOnItemClickListener { _, _, i, _ ->
-            startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", cards[i].id))
+            val c = cards[i]
+            if (selected.isNotEmpty()) toggleSel(c.id)
+            else startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", c.id))
         }
-        grid.setOnItemLongClickListener { _, _, i, _ -> cardDialog(cards[i]); true }
+        grid.setOnItemLongClickListener { _, _, i, _ -> toggleSel(cards[i].id); true }
 
         val empty = TextView(this).apply {
             text = "هنوز تصویری اضافه نکرده‌ای\nاز «افزودن تصویر» شروع کن"
@@ -114,6 +102,32 @@ class MainActivity : Activity() {
         refresh()
     }
 
+    override fun onBackPressed() {
+        if (selected.isNotEmpty()) clearSelection() else super.onBackPressed()
+    }
+
+    // ---------- انتخاب چندتایی ----------
+    private fun toggleSel(id: Long) {
+        if (!selected.add(id)) selected.remove(id)
+        updateSel()
+    }
+
+    private fun clearSelection() { selected.clear(); updateSel() }
+
+    private fun updateSel() {
+        bar.view.visibility = if (selected.isEmpty()) View.GONE else View.VISIBLE
+        bar.countText.text = "${selected.size} انتخاب شده"
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun moveSelected() {
+        moveDialog(this, db, selected.toList()) { selected.clear(); refresh() }
+    }
+
+    private fun deleteSelected() {
+        deleteDialog(this, db, cards.filter { selected.contains(it.id) }) { selected.clear(); refresh() }
+    }
+
     /** زوم دو انگشتی روی گالری: step=+1 بزرگ‌تر (ستون کمتر)، -1 کوچک‌تر */
     private fun changeColumns(step: Int) {
         val n = (columns - step).coerceIn(1, 6)
@@ -129,6 +143,8 @@ class MainActivity : Activity() {
     private fun refresh() {
         cards = db.all()
         stats.text = "سررسید: ${db.dueCards().size} • ستاره‌دار: ${cards.count { it.star == 1 }} • کل: ${cards.size}"
+        bar.view.visibility = if (selected.isEmpty()) View.GONE else View.VISIBLE
+        bar.countText.text = "${selected.size} انتخاب شده"
         adapter.notifyDataSetChanged()
     }
 
@@ -137,9 +153,8 @@ class MainActivity : Activity() {
         else startActivity(Intent(this, ReviewActivity::class.java))
     }
 
-    private fun startStarred() {
-        if (db.starred().isEmpty()) Toast.makeText(this, "هنوز کارت ستاره‌داری نداری", Toast.LENGTH_SHORT).show()
-        else startActivity(Intent(this, ReviewActivity::class.java).putExtra("starred", true))
+    private fun openStarredFolder() {
+        startActivity(Intent(this, FolderActivity::class.java).putExtra("folder", 0L))
     }
 
     private fun pickImages() {
@@ -147,20 +162,6 @@ class MainActivity : Activity() {
             type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }, 1)
-    }
-
-    private fun cardDialog(c: Card) {
-        val starLabel = if (c.star == 1) "برداشتن ستاره" else "ستاره‌دار کردن"
-        AlertDialog.Builder(this).setItems(arrayOf(starLabel, "حذف کارت")) { _, which ->
-            if (which == 0) {
-                db.setStar(c.id, if (c.star == 1) 0 else 1); refresh()
-            } else {
-                AlertDialog.Builder(this).setMessage("این کارت حذف شود؟")
-                    .setPositiveButton("حذف") { _, _ ->
-                        db.delete(c.id); U.deleteImage(this, c.front); U.deleteImage(this, c.back); refresh()
-                    }.setNegativeButton("لغو", null).show()
-            }
-        }.show()
     }
 
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
