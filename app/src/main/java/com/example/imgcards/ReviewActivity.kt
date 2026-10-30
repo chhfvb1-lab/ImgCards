@@ -53,7 +53,11 @@ class ReviewActivity : Activity() {
         super.onCreate(b)
         db = Db(this)
         starredMode = intent.getBooleanExtra("starred", false)
-        if (starredMode) cards.addAll(db.starred().shuffled()) else cards.addAll(db.dueCards())
+        if (starredMode) {
+            val fid = intent.getLongExtra("folder", -1L)
+            val list = if (fid < 0) db.starred() else db.starred().filter { it.folder == fid }
+            cards.addAll(list.shuffled())
+        } else cards.addAll(db.dueCards())
 
         column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
