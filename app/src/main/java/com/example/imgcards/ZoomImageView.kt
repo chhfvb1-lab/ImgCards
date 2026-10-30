@@ -20,6 +20,7 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
     private val maxScale = 8f
 
     var onTap: (() -> Unit)? = null
+    var onHold: (() -> Unit)? = null
     /** +1 = کشیدن به چپ (بعدی)، -1 = کشیدن به راست (قبلی) */
     var onSwipe: ((Int) -> Unit)? = null
 
@@ -49,6 +50,7 @@ class ZoomImageView(ctx: Context) : ImageView(ctx) {
             return false
         }
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean { onTap?.invoke(); return true }
+        override fun onLongPress(e: MotionEvent) { onHold?.invoke() }
         override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
             if (scale > 1f && !scaleDet.isInProgress) { tx -= dx; ty -= dy; applyMatrix() }
             return true
