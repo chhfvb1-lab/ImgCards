@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         row("افزودن تصویر" to { pickImages() }, "مدیریت کارت‌ها" to { startActivity(Intent(this, ManageActivity::class.java)) })
         root.addView(header)
 
-        bar = SelectionBar(this, { moveSelected() }, { deleteSelected() }, { clearSelection() })
+        bar = SelectionBar(this, "★ ستاره", { moveSelected() }, { deleteSelected() }, { clearSelection() })
         root.addView(bar.view)
 
         // پایین: گالری
@@ -121,7 +121,11 @@ class MainActivity : Activity() {
     }
 
     private fun moveSelected() {
-        moveDialog(this, db, selected.toList()) { selected.clear(); refresh() }
+        val n = selected.size
+        db.setStars(selected.toList(), 1)
+        Toast.makeText(this, "$n تصویر به پوشه ستاره‌دارها رفت ★", Toast.LENGTH_SHORT).show()
+        selected.clear()
+        refresh()
     }
 
     private fun deleteSelected() {
@@ -142,7 +146,7 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         cards = db.all()
-        stats.text = "سررسید: ${db.dueCards().size} • ستاره‌دار: ${cards.count { it.star == 1 }} • کل: ${cards.size}"
+        stats.text = "سررسید: ${db.dueCards().size} • ★: ${cards.count { it.star == 1 }} • ★★: ${cards.count { it.star == 2 }} • کل: ${cards.size}"
         bar.view.visibility = if (selected.isEmpty()) View.GONE else View.VISIBLE
         bar.countText.text = "${selected.size} انتخاب شده"
         adapter.notifyDataSetChanged()
@@ -154,7 +158,7 @@ class MainActivity : Activity() {
     }
 
     private fun openStarredFolder() {
-        startActivity(Intent(this, FolderActivity::class.java).putExtra("folder", 0L))
+        startActivity(Intent(this, FolderActivity::class.java).putExtra("level", 1))
     }
 
     private fun pickImages() {
