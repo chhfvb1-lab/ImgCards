@@ -191,8 +191,8 @@ class ReviewActivity : Activity() {
         locked = !locked
         requestedOrientation = if (locked) ActivityInfo.SCREEN_ORIENTATION_LOCKED
         else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        lockBtn.text = if (locked) "🔓\nآزاد" else "🔒\nقفل"
-        Toast.makeText(this, if (locked) "چرخش قفل شد" else "چرخش آزاد شد", Toast.LENGTH_SHORT).show()
+        lockBtn.text = if (locked) "🔓\nباز" else "🔒\nقفل"
+        Toast.makeText(this, if (locked) "چرخش قفل شد" else "چرخش باز شد", Toast.LENGTH_SHORT).show()
     }
 
     // ---------- ناوبری بین کارت‌ها ----------
