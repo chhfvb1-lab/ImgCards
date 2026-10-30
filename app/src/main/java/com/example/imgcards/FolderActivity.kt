@@ -1,7 +1,6 @@
 package com.example.imgcards
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
@@ -14,17 +13,20 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
-private class Cell(val folder: Folder?, val card: Card?)
+private class Cell(val isTile: Boolean, val card: Card?)
 
-/** پوشه‌ی ستاره‌دارها (folder=0) یا یکی از پوشه‌های داخل آن */
+/**
+ * level = 1 : پوشه ستاره‌دارها (بالایش یک کاشی «پوشه دو ستاره» دارد)
+ * level = 2 : پوشه دو ستاره (داخل ستاره‌دارها)
+ */
 class FolderActivity : Activity() {
     private lateinit var db: Db
-    private var folderId = 0L
+    private var level = 1
     private lateinit var grid: GridView
     private lateinit var adapter: BaseAdapter
     private lateinit var bar: SelectionBar
     private var items: List<Cell> = emptyList()
-    private var counts: Map<Long, Int> = emptyMap()
+    private var tileCount = 0
     private val selected = LinkedHashSet<Long>()
     private var columns = 3
     private val prefs by lazy { getSharedPreferences("settings", MODE_PRIVATE) }
@@ -32,7 +34,7 @@ class FolderActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
-        folderId = intent.getLongExtra("folder", 0L)
+        level = intent.getIntExtra("level", 1)
         columns = prefs.getInt("gridCols", 3).coerceIn(1, 6)
         val pad = U.dp(this, 10)
         val root = LinearLayout(this).apply {
@@ -44,20 +46,15 @@ class FolderActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
         }
-        val heading = if (folderId == 0L) "★ پوشه ستاره‌دارها"
-        else "📁 " + (db.folders().firstOrNull { it.id == folderId }?.name ?: "پوشه")
-        header.addView(TextView(this).apply { text = heading; textSize = 20f; gravity = Gravity.CENTER })
-        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        r.addView(btn("▶ مرور این پوشه") { startReview() }.apply { textSize = 14f }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (folderId == 0L) {
-            r.addView(btn("➕ پوشه جدید") {
-                promptName(this, "پوشه جدید") { n -> db.addFolder(n); refresh() }
-            }.apply { textSize = 14f }, LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        header.addView(r)
+        header.addView(TextView(this).apply {
+            text = if (level == 1) "★ پوشه ستاره‌دارها" else "★★ پوشه دو ستاره"
+            textSize = 20f; gravity = Gravity.CENTER
+        })
+        header.addView(btn("▶ مرور این پوشه") { startReview() }.apply { textSize = 14f })
         root.addView(header)
 
-        bar = SelectionBar(this, { moveSelected() }, { deleteSelected() }, { clearSelection() })
+        val moveLabel = if (level == 1) "★★ دو ستاره" else "★ بازگشت"
+        bar = SelectionBar(this, moveLabel, { moveSelected() }, { deleteSelected() }, { clearSelection() })
         root.addView(bar.view)
 
         val sp = U.dp(this, 2)
@@ -74,25 +71,28 @@ class FolderActivity : Activity() {
             override fun getItem(i: Int): Any = items[i]
             override fun getItemId(i: Int) = i.toLong()
             override fun getViewTypeCount() = 2
-            override fun getItemViewType(i: Int) = if (items[i].folder != null) 0 else 1
+            override fun getItemViewType(i: Int) = if (items[i].isTile) 0 else 1
             override fun getView(i: Int, v: View?, p: ViewGroup?): View {
                 val size = (resources.displayMetrics.widthPixels - (columns - 1) * sp) / columns
-                val f = items[i].folder
                 val c = items[i].card
-                if (f != null) {
-                    return makeFolderCell(this@FolderActivity, size, f.name, counts[f.id] ?: 0)
+                if (c == null) {
+                    return makeFolderCell(this@FolderActivity, size, "★★ پوشه دو ستاره", tileCount)
                 }
                 val cell = (v as? FrameLayout) ?: makeImageCell(this@FolderActivity)
-                bindImageCell(this@FolderActivity, cell, c!!, size, thumbPx(columns), false, selected.contains(c.id))
+                bindImageCell(this@FolderActivity, cell, c, size, thumbPx(columns), false, selected.contains(c.id))
                 return cell
             }
         }
         grid.adapter = adapter
         grid.setOnItemClickListener { _, _, i, _ -> onCellClick(items[i]) }
-        grid.setOnItemLongClickListener { _, _, i, _ -> onCellLongClick(items[i]); true }
+        grid.setOnItemLongClickListener { _, _, i, _ ->
+            val c = items[i].card
+            if (c != null) toggleSel(c.id)
+            true
+        }
 
         val empty = TextView(this).apply {
-            text = "این پوشه خالی است\nاز صفحه‌ی اول تصویری را نگه دار و «انتقال» را بزن"
+            text = if (level == 1) "این پوشه خالی است" else "پوشه دو ستاره خالی است\nدر پوشه ستاره‌دارها تصویر را باز کن و «★★» را بزن"
             gravity = Gravity.CENTER; textSize = 16f
         }
         val frame = FrameLayout(this)
@@ -113,32 +113,16 @@ class FolderActivity : Activity() {
     }
 
     private fun onCellClick(cell: Cell) {
-        val f = cell.folder
         val c = cell.card
-        if (f != null) {
+        if (c == null) {
             if (selected.isEmpty()) {
-                startActivity(Intent(this, FolderActivity::class.java).putExtra("folder", f.id))
+                startActivity(Intent(this, FolderActivity::class.java).putExtra("level", 2))
             }
-        } else if (c != null) {
-            if (selected.isNotEmpty()) toggleSel(c.id)
-            else {
-                val ids = items.mapNotNull { x -> x.card?.id }.toLongArray()
-                startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", c.id).putExtra("ids", ids))
-            }
-        }
-    }
-
-    private fun onCellLongClick(cell: Cell) {
-        val f = cell.folder
-        val c = cell.card
-        if (c != null) {
+        } else if (selected.isNotEmpty()) {
             toggleSel(c.id)
-        } else if (f != null && selected.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setMessage("پوشه «${f.name}» حذف شود؟ تصاویر داخلش حذف نمی‌شوند و به پوشه ستاره‌دارها می‌روند.")
-                .setPositiveButton("حذف پوشه") { _, _ -> db.deleteFolder(f.id); refresh() }
-                .setNegativeButton("لغو", null)
-                .show()
+        } else {
+            val ids = items.mapNotNull { x -> x.card?.id }.toLongArray()
+            startActivity(Intent(this, ViewerActivity::class.java).putExtra("id", c.id).putExtra("ids", ids))
         }
     }
 
@@ -156,8 +140,18 @@ class FolderActivity : Activity() {
         adapter.notifyDataSetChanged()
     }
 
+    /** پوشه ستاره‌دارها: انتخاب‌شده‌ها به پوشه دو ستاره می‌روند؛ پوشه دو ستاره: برمی‌گردند به ستاره‌دارها */
     private fun moveSelected() {
-        moveDialog(this, db, selected.toList()) { selected.clear(); refresh() }
+        val target = if (level == 1) 2 else 1
+        val n = selected.size
+        db.setStars(selected.toList(), target)
+        Toast.makeText(
+            this,
+            if (target == 2) "$n تصویر به پوشه دو ستاره رفت ★★" else "$n تصویر به پوشه ستاره‌دارها برگشت ★",
+            Toast.LENGTH_SHORT
+        ).show()
+        selected.clear()
+        refresh()
     }
 
     private fun deleteSelected() {
@@ -177,28 +171,20 @@ class FolderActivity : Activity() {
     }
 
     private fun startReview() {
-        val all = db.starred()
-        val n = if (folderId == 0L) all.size else all.count { it.folder == folderId }
-        if (n == 0) {
+        if (db.byStar(level).isEmpty()) {
             Toast.makeText(this, "تصویری برای مرور نیست", Toast.LENGTH_SHORT).show(); return
         }
-        startActivity(
-            Intent(this, ReviewActivity::class.java)
-                .putExtra("starred", true)
-                .putExtra("folder", if (folderId == 0L) -1L else folderId)
-        )
+        startActivity(Intent(this, ReviewActivity::class.java).putExtra("level", level))
     }
 
     private fun refresh() {
-        val starred = db.starred()
+        val all = db.all()
         val list = ArrayList<Cell>()
-        if (folderId == 0L) {
-            for (f in db.folders()) list.add(Cell(f, null))
-            for (c in starred) if (c.folder == 0L) list.add(Cell(null, c))
-        } else {
-            for (c in starred) if (c.folder == folderId) list.add(Cell(null, c))
+        if (level == 1) {
+            tileCount = all.count { it.star == 2 }
+            list.add(Cell(true, null))
         }
-        counts = starred.groupingBy { it.folder }.eachCount()
+        for (c in all) if (c.star == level) list.add(Cell(false, c))
         items = list
         updateSel()
     }
