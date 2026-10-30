@@ -23,6 +23,7 @@ class ViewerActivity : Activity() {
     private var pos = 0
     private var animating = false
     private var overlayShown = true
+    private var folderLevel = 0   // 0 = گالری کل، 1/2 = بازشده از پوشه ستاره‌دارها / دو ستاره
 
     private lateinit var img: ZoomImageView
     private lateinit var topBar: LinearLayout
@@ -42,6 +43,7 @@ class ViewerActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         db = Db(this)
+        folderLevel = intent.getIntExtra("level", 0)
         val ids = intent.getLongArrayExtra("ids")
         if (ids != null) {
             val map = db.all().associateBy { it.id }
@@ -169,9 +171,17 @@ class ViewerActivity : Activity() {
     private fun setLevel(v: Int, msg: String) {
         val c = cards[pos]
         db.setStar(c.id, v)
-        cards[pos] = c.copy(star = v)
-        updateButtons()
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        if (folderLevel > 0 && v != folderLevel) {
+            // تصویر از این پوشه خارج شد: همان لحظه از صف حذف شود
+            cards.removeAt(pos)
+            if (cards.isEmpty()) { finish(); return }
+            if (pos >= cards.size) pos = 0
+            showCard()
+        } else {
+            cards[pos] = c.copy(star = v)
+            updateButtons()
+        }
     }
 
     private fun toggleStar() {
@@ -187,11 +197,11 @@ class ViewerActivity : Activity() {
     /** dir: +1 بعدی، -1 قبلی */
     private fun swipeTo(dir: Int) {
         if (animating) return
-        val np = pos + dir
-        if (np < 0 || np >= cards.size) {
-            Toast.makeText(this, if (dir > 0) "آخرین تصویر" else "اولین تصویر", Toast.LENGTH_SHORT).show()
+        if (cards.size <= 1) {
+            Toast.makeText(this, "تصویر دیگری نیست", Toast.LENGTH_SHORT).show()
             return
         }
+        val np = (pos + dir + cards.size) % cards.size   // از آخر به اول و برعکس
         animating = true
         val d = img.width * 0.25f
         img.animate().translationX(-dir * d).alpha(0f).setDuration(110).withEndAction {
